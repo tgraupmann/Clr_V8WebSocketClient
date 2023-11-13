@@ -1,3 +1,4 @@
+#include <iostream>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -19,6 +20,38 @@
 using namespace std;
 
 // Define a simple C++ function to be called from JavaScript
+void ConsoleLog(const v8::FunctionCallbackInfo<v8::Value>& args) {
+    // Check the number of arguments passed
+    if (args.Length() < 1) {
+        args.GetIsolate()->ThrowException(
+            v8::String::NewFromUtf8(args.GetIsolate(), "Invalid number of arguments")
+            .ToLocalChecked());
+        return;
+    }
+
+    printf("log:");
+    for (int i = 0; i < args.Length(); ++i)
+    {
+
+        // Check if the first argument is a string
+        if (!args[i]->IsString()) {
+            args.GetIsolate()->ThrowException(
+                v8::String::NewFromUtf8(args.GetIsolate(), "Argument must be a string")
+                .ToLocalChecked());
+            return;
+        }
+
+        // Convert the first argument to a string
+        v8::Local<v8::String> str = args[i].As<v8::String>();
+        v8::String::Utf8Value utf8(args.GetIsolate(), str);
+
+        // Print the string to the console
+        printf(" %s", *utf8);
+    }
+    printf("\r\n");
+}
+
+// Define a simple C++ function to be called from JavaScript
 void MyCallback(const v8::FunctionCallbackInfo<v8::Value>& args) {
     // Check the number of arguments passed
     if (args.Length() < 1) {
@@ -28,20 +61,26 @@ void MyCallback(const v8::FunctionCallbackInfo<v8::Value>& args) {
         return;
     }
 
-    // Check if the first argument is a string
-    if (!args[0]->IsString()) {
-        args.GetIsolate()->ThrowException(
-            v8::String::NewFromUtf8(args.GetIsolate(), "Argument must be a string")
-            .ToLocalChecked());
-        return;
+    printf("MyCallback:");
+    for (int i = 0; i < args.Length(); ++i)
+    {
+
+        // Check if the first argument is a string
+        if (!args[i]->IsString()) {
+            args.GetIsolate()->ThrowException(
+                v8::String::NewFromUtf8(args.GetIsolate(), "Argument must be a string")
+                .ToLocalChecked());
+            return;
+        }
+
+        // Convert the first argument to a string
+        v8::Local<v8::String> str = args[i].As<v8::String>();
+        v8::String::Utf8Value utf8(args.GetIsolate(), str);
+
+        // Print the string to the console
+        printf(" %s", *utf8);
     }
-
-    // Convert the first argument to a string
-    v8::Local<v8::String> str = args[0].As<v8::String>();
-    v8::String::Utf8Value utf8(args.GetIsolate(), str);
-
-    // Print the string to the console
-    printf("Callback invoked with argument: %s\n", *utf8);
+    printf("\r\n");
 }
 
 int main(int argc, char* argv[]) {
@@ -65,31 +104,62 @@ int main(int argc, char* argv[]) {
         // Enter the context for compiling and running the hello world script.
         v8::Context::Scope context_scope(context);
 
-#pragma region Create C++ Callback
+#pragma region Create a console.log callback
+        {
+            // Expose the C++ function to JavaScript
+            v8::Local<v8::Object> global = context->Global();
+            v8::Local<v8::ObjectTemplate> global_template = v8::ObjectTemplate::New(isolate);
+            global_template->Set(
+                isolate,
+                "log",
+                v8::FunctionTemplate::New(isolate, ConsoleLog));
 
-        // Expose the C++ function to JavaScript
-        v8::Local<v8::Object> global = context->Global();
-        v8::Local<v8::ObjectTemplate> global_template = v8::ObjectTemplate::New(isolate);
-        global_template->Set(
-            isolate,
-            "myCallback",
-            v8::FunctionTemplate::New(isolate, MyCallback));
+            // Create an instance of the template and add it to the global object
+            v8::Local<v8::Object> global_instance = global_template->NewInstance(context).ToLocalChecked();
+            global->Set(
+                context,
+                v8::String::NewFromUtf8(isolate, "console").ToLocalChecked(),
+                global_instance);
+        }
+#pragma endregion Create a console.log callback
 
-        // Create an instance of the template and add it to the global object
-        v8::Local<v8::Object> global_instance = global_template->NewInstance(context).ToLocalChecked();
-        global->Set(
-            context,
-            v8::String::NewFromUtf8(isolate, "MyNamespace").ToLocalChecked(),
-            global_instance);
+#pragma region Create C++ MyCallback
+        {
+            // Expose the C++ function to JavaScript
+            v8::Local<v8::Object> global = context->Global();
+            v8::Local<v8::ObjectTemplate> global_template = v8::ObjectTemplate::New(isolate);
+            global_template->Set(
+                isolate,
+                "myCallback",
+                v8::FunctionTemplate::New(isolate, MyCallback));
 
-
-#pragma endregion Create C++ Callback
+            // Create an instance of the template and add it to the global object
+            v8::Local<v8::Object> global_instance = global_template->NewInstance(context).ToLocalChecked();
+            global->Set(
+                context,
+                v8::String::NewFromUtf8(isolate, "MyNamespace").ToLocalChecked(),
+                global_instance);
+        }
+#pragma endregion Create C++ MyCallback
 
 
         {
             // Create a string containing the JavaScript source code.
             v8::Local<v8::String> source =
-                v8::String::NewFromUtf8Literal(isolate, "MyNamespace.myCallback('hello'); 'Hello, World!';");
+                v8::String::NewFromUtf8Literal(isolate, R"(
+
+// const ws = new WebSocket("wss://example.org");
+// <unknown>:64: Uncaught ReferenceError: WebSocket is not defined
+//
+// #
+// # Fatal error in v8::ToLocalChecked
+// # Empty MaybeLocal
+// #
+console.log('WebSocket is not available in V8!!!');
+
+MyNamespace.myCallback('hello');
+'Hello, World!';
+                    )");
             // Compile the source code.
             v8::Local<v8::Script> script =
                 v8::Script::Compile(context, source).ToLocalChecked();
