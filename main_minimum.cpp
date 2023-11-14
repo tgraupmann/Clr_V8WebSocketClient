@@ -155,19 +155,24 @@ int main(int argc, char* argv[]) {
 				cSource.substr(0, 100).c_str(),
 				cSource.substr(cSource.size() - 200).c_str());
 	
-			// Create a string containing the JavaScript source code.
-			v8::Local<v8::String> source =
-				v8::String::NewFromUtf8(isolate, cSource.c_str()).ToLocalChecked();
-			// Compile the source code.
-			v8::Local<v8::Script> script =
-				v8::Script::Compile(context, source).ToLocalChecked();
-			// Run the script to get the result.
-			v8::Local<v8::Value> result = script->Run(context).ToLocalChecked();
+			runJS(context, isolate, cSource.c_str());
+
+			runJS(context, isolate, "goMyFunc();\r\n");
 		}
 	}
 
-	//printf("Wait to exit...\r\n");
-	//Sleep(3000);
+	/*
+	while (true)
+	{
+		v8::platform::PumpMessageLoop(platform.get(), isolate);
+		//isolate->RunMicrotasks();
+
+		Sleep(1000);
+	}
+	*/
+
+	printf("Wait to exit...\r\n");
+	Sleep(3000);
 
 	// Dispose the isolate and tear down V8.
 	isolate->Dispose();

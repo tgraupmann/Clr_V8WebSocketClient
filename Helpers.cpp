@@ -136,3 +136,46 @@ void SetCallbackConsoleLog(v8::Local<v8::Context> context, v8::Isolate* isolate)
 }
 
 #pragma endregion Logging
+
+void runJS(v8::Local<v8::Context> context, v8::Isolate* isolate, const char* js)
+{
+	// Create a string containing the JavaScript source code.
+	v8::Local<v8::String> source =
+		v8::String::NewFromUtf8(isolate, js).ToLocalChecked();
+
+	// Compile the source code.
+	v8::Local<v8::Script> script =
+		v8::Script::Compile(context, source).ToLocalChecked();
+
+	//v8::String::Utf8Value strScript(isolate, script);
+	//printf("Script:\r\n%s\r\n", *strScript);
+
+	// Run the script
+	script->Run(context);
+}
+
+v8::Local<v8::Value> runJSResult(v8::Local<v8::Context> context, v8::Isolate* isolate, const char* js, bool printResult)
+{
+	// Create a string containing the JavaScript source code.
+	v8::Local<v8::String> source =
+		v8::String::NewFromUtf8(isolate, js).ToLocalChecked();
+
+	// Compile the source code.
+	v8::Local<v8::Script> script =
+		v8::Script::Compile(context, source).ToLocalChecked();
+
+	v8::String::Utf8Value strScript(isolate, script);
+	printf("Script:\r\n%s\r\n", *strScript);
+
+	// Run the script to get the result.
+	v8::Local<v8::Value> result = script->Run(context).ToLocalChecked();
+
+	if (printResult)
+	{
+		// Convert the result to an UTF8 string and print it.
+		v8::String::Utf8Value utf8(isolate, result);
+		printf("%s\n", *utf8);
+	}
+
+	return result;
+}
