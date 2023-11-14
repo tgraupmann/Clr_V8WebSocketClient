@@ -258,7 +258,7 @@ function updateDOM(text) {
 			runJS(context, isolate, R"(
 	globalThis.crypto = 'ignore';
 	globalThis.performance = {
-		now: function() { return new Date() },
+		now: function() { return Date.now() },
 	};
 )", false);
 
@@ -278,31 +278,55 @@ function updateDOM(text) {
 
 	console.log('Define loadMyModule');
 	async function loadMyModule(callback) {
-		console.log('loadMyModule:');
-		if (WebAssembly) {
-			console.log('WebAssembly exists');
-			if (!WebAssembly.instantiateStreaming) {
-				const go = new Go();
-				console.log('Constructed Go(): ' + JSON.stringify(go.importObject, null, 2));
-				go.importObject = {
-					_gotest: {},
-					gojs: {},
-				};
-				console.log('Invoking WebAssembly.instantiate...');
-				const instance = WebAssembly.instantiate(bytes, go.importObject);
-				//const instance = await WebAssembly.instantiate(bytes, go.importObject);
-				console.log('Try to call goMyFunc()...');
-				goMyFunc();
-				console.log('Called goMyFunc()');
-				//const instance = await WebAssembly.instantiate(bytes, go.importObject);
-				//const instance = await WebAssembly.instantiate(bytes.buffer, go.importObject);
-				console.log('WASM instance created:');
-				if (callback) {
-					callback();
+
+		try {
+
+			console.log('loadMyModule:');
+			if (WebAssembly) {
+				console.log('WebAssembly exists');
+				if (!WebAssembly.instantiateStreaming) {
+					const goInstance = new Go();
+					console.log('Constructed Go(): ' + JSON.stringify(goInstance.importObject, null, 2));
+	/*
+					goInstance.importObject = {
+						gojs: {},
+					};
+					console.log('Set Go(): ' + JSON.stringify(goInstance.importObject, null, 2));
+	*/
+					console.log('Invoking WebAssembly.instantiate...');
+					const result = await  WebAssembly.instantiate(bytes, goInstance.importObject);
+					const instance = result.instance;
+					console.log('result.instance: ', JSON.stringify(instance, null, 2));
+				
+					//console.log('globalThis: ' + JSON.stringify(globalThis, null, 2));
+				
+					console.log('Call run()...');
+					//instance.run(goInstance);
+					console.log('Called run()...');
+
+					console.log('instance.exports: ' + JSON.stringify(instance.exports, null, 2));
+
+					// You can now access exports from the WebAssembly module
+					// For example, if you have an exported function called "main"
+					if (instance.exports.main) {
+						console.log('Calling WebAssembly function "main"...');
+						instance.exports.main();
+					} else {
+						console.log('WebAssembly function "main" not found.');
+					}
+
+					//const instance = await WebAssembly.instantiate(bytes, go.importObject);
+					//const instance = await WebAssembly.instantiate(bytes.buffer, go.importObject);
+					console.log('WASM instance created:');
+					if (callback) {
+						callback();
+					}
 				}
+			} else {
+				console.log('WebAssembly is missing!');
 			}
-		} else {
-			console.log('WebAssembly is missing!');
+		} catch (error) {
+			console.log('loadMyModule: error=' + error);
 		}
 	}
 )", false);
@@ -321,7 +345,13 @@ function updateDOM(text) {
 
 	printf("Wait to exit...\r\n");
 
-	Sleep(60000);
+	while (true)
+	{
+		v8::platform::PumpMessageLoop(platform.get(), isolate);
+		//isolate->RunMicrotasks();
+
+		Sleep(100);
+	}
 
 	// Dispose the isolate and tear down V8.
 	isolate->Dispose();
