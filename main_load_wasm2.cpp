@@ -160,23 +160,15 @@ int main(int argc, char* argv[]) {
 			runJS(context, isolate, R"(
 	globalThis.crypto = 'ignore';
 	globalThis.performance = 'ignore';
-
-	class TextEncoder {
-	  constructor() {
-	  }
-	}
-
-	globalThis.TextEncoder = TextEncoder;
-
-	class TextDecoder {
-	  constructor() {
-	  }
-	}
-	globalThis.TextDecoder = TextDecoder;
 )");
 
-			string wasmJS = readFile("goclient/js/wasm_exec.js");
-			runJS(context, isolate, wasmJS.c_str());
+			string encodingJS = readFile("goclient/js/encoding.min.js");
+			runJS(context, isolate, encodingJS.c_str());
+
+			string wasmExecJS = readFile("goclient/js/wasm_exec.js");
+			runJS(context, isolate, wasmExecJS.c_str());
+
+			//runJS(context, isolate, "fetch()");
 
 			loadWASM(context, isolate, "goclient\\main.wasm");
 
