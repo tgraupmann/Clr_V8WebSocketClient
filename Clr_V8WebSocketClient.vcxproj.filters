@@ -31,10 +31,10 @@
     <ClCompile Include="AssemblyInfo.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="main_minimum.cpp">
+    <ClCompile Include="Helpers.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="Helpers.cpp">
+    <ClCompile Include="main_minimum.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

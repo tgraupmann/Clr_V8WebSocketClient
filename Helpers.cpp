@@ -1,5 +1,6 @@
 #include "Helpers.h"
 
+#include <iostream>
 #include <fstream>
 #include <sstream>
 #include <string>
@@ -136,6 +137,32 @@ void SetCallbackConsoleLog(v8::Local<v8::Context> context, v8::Isolate* isolate)
 }
 
 #pragma endregion Logging
+
+// The C++ function to be called from JavaScript
+void updateDOMCallback(const v8::FunctionCallbackInfo<v8::Value>& args) {
+	// Extract the argument (assuming it's a string)
+	if (args.Length() > 0 && args[0]->IsString()) {
+		v8::String::Utf8Value str(args.GetIsolate(), args[0].As<v8::String>());
+		std::cout << "UpdateDOM Callback: " << *str << std::endl;
+	}
+}
+
+void ExposeUpdateDOMCallback(v8::Local<v8::Context> context, v8::Isolate* isolate, v8::Local<v8::Object> global) {
+	// Create a new function template with the callback
+	v8::Local<v8::FunctionTemplate> functionTemplate =
+		v8::FunctionTemplate::New(isolate, updateDOMCallback);
+
+	// Get the function object from the template
+	v8::Local<v8::Function> function =
+		functionTemplate->GetFunction(isolate->GetCurrentContext()).ToLocalChecked();
+
+	// Set the function name to "updateDOM" in the global object
+	global->Set(
+		context,
+		v8::String::NewFromUtf8(isolate, "updateDOM").ToLocalChecked(),
+		function
+	);
+}
 
 void runJS(v8::Local<v8::Context> context, v8::Isolate* isolate, const char* js)
 {
