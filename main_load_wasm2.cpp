@@ -9,6 +9,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "libplatform/libplatform.h"
+#include "v8.h"
 #include "v8-context.h"
 #include "v8-initialization.h"
 #include "v8-isolate.h"
@@ -27,7 +28,38 @@
 
 using namespace std;
 
-v8::Local<v8::Value> runJS(v8::Local<v8::Context> context, v8::Isolate* isolate, const char* js)
+// Define a simple C++ function to be called from JavaScript
+void PrefixLog(const char* prefix, const v8::FunctionCallbackInfo<v8::Value>& args) {
+	printf("%s:", prefix);;
+	for (int i = 0; i < args.Length(); ++i)
+	{
+
+		// Check if the first argument is a string
+		if (!args[i]->IsString()) {
+			args.GetIsolate()->ThrowException(
+				v8::String::NewFromUtf8(args.GetIsolate(), "Argument must be a string")
+				.ToLocalChecked());
+			return;
+		}
+
+		// Convert the first argument to a string
+		v8::Local<v8::String> str = args[i].As<v8::String>();
+		v8::String::Utf8Value utf8(args.GetIsolate(), str);
+
+		// Print the string to the console
+		printf(" %s", *utf8);
+	}
+	printf("\r\n");
+}
+void ConsoleLog(const v8::FunctionCallbackInfo<v8::Value>& args) {
+	PrefixLog("log", args);	
+}
+
+void ConsoleWarn(const v8::FunctionCallbackInfo<v8::Value>& args) {
+	PrefixLog("warn", args);
+}
+
+v8::Local<v8::Value> runJS(v8::Local<v8::Context> context, v8::Isolate* isolate, const char* js, bool printResult)
 {
 	// Create a string containing the JavaScript source code.
 	v8::Local<v8::String> source =
@@ -41,10 +73,20 @@ v8::Local<v8::Value> runJS(v8::Local<v8::Context> context, v8::Isolate* isolate,
 	printf("Script:\r\n%s\r\n", *strScript);
 
 	// Run the script to get the result.
-	return script->Run(context).ToLocalChecked();
+	v8::Local<v8::Value> result = script->Run(context).ToLocalChecked();
+
+	if (printResult)
+	{
+		// Convert the result to an UTF8 string and print it.
+		v8::String::Utf8Value utf8(isolate, result);
+		printf("%s\n", *utf8);
+	}
+
+	return result;
 }
 
 std::string readFile(const char* filePath) {
+	printf("readFile: %s\r\n", filePath);
 	std::ifstream file(filePath, std::ios::in | std::ios::binary);
 	if (!file.is_open()) {
 		return ""; // Return an empty string if the file cannot be opened
@@ -114,9 +156,6 @@ void loadWASM(v8::Local<v8::Context> context, v8::Isolate* isolate, const char* 
 	// Run the script to get the result.
 	script->Run(context).ToLocalChecked();
 
-	runJS(context, isolate, "let module = new WebAssembly.Module(bytes);\n");
-	runJS(context, isolate, "let instance = new WebAssembly.Instance(module, {});\n");
-
 	printf("WASM file loaded!\r\n");
 }
 
@@ -138,9 +177,46 @@ int main(int argc, char* argv[]) {
 		v8::HandleScope handle_scope(isolate);
 		// Create a new context.
 		v8::Local<v8::Context> context = v8::Context::New(isolate);
-
 		// Enter the context for compiling and running the hello world script.
 		v8::Context::Scope context_scope(context);
+
+#pragma region Create a console.log callback
+		{
+			// Expose the C++ function to JavaScript
+			v8::Local<v8::Object> global = context->Global();
+			v8::Local<v8::ObjectTemplate> global_template = v8::ObjectTemplate::New(isolate);
+			global_template->Set(
+				isolate,
+				"log",
+				v8::FunctionTemplate::New(isolate, ConsoleLog));
+
+			// Create an instance of the template and add it to the global object
+			v8::Local<v8::Object> global_instance = global_template->NewInstance(context).ToLocalChecked();
+			global->Set(
+				context,
+				v8::String::NewFromUtf8(isolate, "console").ToLocalChecked(),
+				global_instance);
+		}
+#pragma endregion Create a console.log callback
+
+		/*
+#pragma region Create a console.warn callback
+		{
+			// Expose the C++ function to JavaScript
+			global_template->Set(
+				isolate,
+				"warn",
+				v8::FunctionTemplate::New(isolate, ConsoleWarn));
+
+			// Create an instance of the template and add it to the global object
+			global->Set(
+				context,
+				v8::String::NewFromUtf8(isolate, "console").ToLocalChecked(),
+				global_instance);
+		}
+#pragma endregion Create a console.warn callback
+		*/
+
 		{
 			// Create a string containing the JavaScript source code.
 			v8::Local<v8::String> source =
@@ -155,30 +231,91 @@ int main(int argc, char* argv[]) {
 			printf("%s\n", *utf8);
 		}
 
+		//runJS(context, isolate, "console.warn('THIS SHOULD WARN SOMETHING');", false);
+
+		runJS(context, isolate, R"(
+
+	console.log('THIS SHOULD LOG SOMETHING');
+
+	//hack
+	console.warn = console.log;
+	console.warn('THIS SHOULD WARN SOMETHING');
+	console.error = console.log;
+
+)", false);
+
+		runJS(context, isolate, R"(
+
+function updateDOM(text) {
+    console.log('updateDOM:', text);
+}
+
+updateDOM("Invoke console.log");
+
+"Hello returned from JS" // last line of the JS script, this will be the returned result
+)", true);
+
 		if (true)
 		{
 			runJS(context, isolate, R"(
 	globalThis.crypto = 'ignore';
-	globalThis.performance = 'ignore';
-)");
+	globalThis.performance = {
+		now: function() { return new Date() },
+	};
+)", false);
 
 			string encodingJS = readFile("goclient/js/encoding.min.js");
-			runJS(context, isolate, encodingJS.c_str());
+			runJS(context, isolate, encodingJS.c_str(), false);
 
 			string wasmExecJS = readFile("goclient/js/wasm_exec.js");
-			runJS(context, isolate, wasmExecJS.c_str());
+			runJS(context, isolate, wasmExecJS.c_str(), false);
 
-			//runJS(context, isolate, "fetch()");
+			runJS(context, isolate, "JSON.stringify(globalThis, null, 2)", true);
 
 			loadWASM(context, isolate, "goclient\\main.wasm");
 
-			//runJS(context, isolate, "goMyFunc();\r\n");
+			//runJS(context, isolate, "WebAssembly.instantiateStreaming", true);
+
+			runJS(context, isolate, R"(
+
+	console.log('Define loadMyModule');
+	async function loadMyModule(callback) {
+		console.log('loadMyModule:');
+		if (WebAssembly) {
+			console.log('WebAssembly exists');
+			if (!WebAssembly.instantiateStreaming) {
+				const go = new Go();
+				//console.log('Constructed Go(): + JSON.stringify(go, null, 2));
+				console.log('Invoking WebAssembly.instantiate...');
+				const instance = await WebAssembly.instantiate(bytes, go.importObject);
+				console.log('WASM instance created:');
+				WebAssembly.instantiateStreaming(instance);
+				console.log('Invoked instantiateStreaming:');
+				if (callback) {
+					callback();
+				}
+			}
+		} else {
+			console.log('WebAssembly is missing!');
+		}
+	}
+)", false);
+
+		runJS(context, isolate, R"(
+
+	loadMyModule(function() {
+		goMyFunc();
+	});
+
+)", false);
+
+			//runJS(context, isolate, "JSON.stringify(globalThis, null, 2)", true);
 		}
 	}
 
 	printf("Wait to exit...\r\n");
 
-	Sleep(1000);
+	Sleep(60000);
 
 	// Dispose the isolate and tear down V8.
 	isolate->Dispose();
