@@ -5,8 +5,6 @@ package main
 import (
 	"fmt"
 	"log"
-	"os"
-	"os/signal"
 	"syscall/js"
 	"time"
 
@@ -16,15 +14,21 @@ import (
 func goMyFunc(value js.Value, args []js.Value) interface{} {
 	fmt.Println("goMyFunc: Invoked.")
 	js.Global().Call("updateDOM", "goMyFunc: This was called from Golang!")
+	//js.Global().Call("console.log", "goMyFunc: This was called from Golang!")
 	return nil
 }
 
 func main() {
 
-	fmt.Println("This is the start.")
-
 	// Register the Go function as a JavaScript function
 	js.Global().Set("goMyFunc", js.FuncOf(goMyFunc))
+
+	fmt.Println("This is the start.")
+	//js.Global().Call("console.log", "This is the start.")
+
+	time.Sleep(time.Second)
+
+	fmt.Println("Invoke updateDOM...")
 
 	js.Global().Call("updateDOM", "This is called from Golang!")
 
@@ -44,17 +48,11 @@ func main() {
 	// Start a goroutine to read and print messages from the server
 	go readMessages(conn)
 
-	// Wait for interruption (Ctrl+C) to gracefully close the connection
-	interrupt := make(chan os.Signal, 1)
-	signal.Notify(interrupt, os.Interrupt)
+	time.Sleep(10 * time.Second)
 
-	select {
-	case <-interrupt:
-		fmt.Println("Interrupt received, closing connection.")
-		conn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
-		time.Sleep(time.Second)
-		return
-	}
+	fmt.Println("Interrupt received, closing connection.")
+	conn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
+	time.Sleep(time.Second)
 }
 
 func readMessages(conn *websocket.Conn) {

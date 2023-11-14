@@ -247,10 +247,8 @@ int main(int argc, char* argv[]) {
 		runJS(context, isolate, R"(
 
 function updateDOM(text) {
-    console.log('updateDOM:', text);
+    console.log('***************updateDOM:', text);
 }
-
-updateDOM("Invoke console.log");
 
 "Hello returned from JS" // last line of the JS script, this will be the returned result
 )", true);
@@ -285,12 +283,20 @@ updateDOM("Invoke console.log");
 			console.log('WebAssembly exists');
 			if (!WebAssembly.instantiateStreaming) {
 				const go = new Go();
-				//console.log('Constructed Go(): + JSON.stringify(go, null, 2));
+				console.log('Constructed Go(): ' + JSON.stringify(go.importObject, null, 2));
+				go.importObject = {
+					_gotest: {},
+					gojs: {},
+				};
 				console.log('Invoking WebAssembly.instantiate...');
-				const instance = await WebAssembly.instantiate(bytes, go.importObject);
+				const instance = WebAssembly.instantiate(bytes, go.importObject);
+				//const instance = await WebAssembly.instantiate(bytes, go.importObject);
+				console.log('Try to call goMyFunc()...');
+				goMyFunc();
+				console.log('Called goMyFunc()');
+				//const instance = await WebAssembly.instantiate(bytes, go.importObject);
+				//const instance = await WebAssembly.instantiate(bytes.buffer, go.importObject);
 				console.log('WASM instance created:');
-				WebAssembly.instantiateStreaming(instance);
-				console.log('Invoked instantiateStreaming:');
 				if (callback) {
 					callback();
 				}
