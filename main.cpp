@@ -1,4 +1,6 @@
+#include <fstream>
 #include <iostream>
+#include <sstream>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -10,6 +12,9 @@
 #include "v8-local-handle.h"
 #include "v8-primitive.h"
 #include "v8-script.h"
+
+#define WIN32_LEAN_AND_MEAN
+#include <Windows.h>
 
 #pragma comment(lib, "third_party_icu_icui18n.dll.lib")
 #pragma comment(lib, "third_party_zlib.dll.lib")
@@ -83,6 +88,66 @@ void MyCallback(const v8::FunctionCallbackInfo<v8::Value>& args) {
     printf("\r\n");
 }
 
+// Function to read the contents of a file and return them as a string
+std::string readFile(const char* filePath) {
+    std::ifstream file(filePath, std::ios::in | std::ios::binary);
+    if (!file.is_open()) {
+        return ""; // Return an empty string if the file cannot be opened
+    }
+
+    // Read the contents of the file into a stringstream
+    std::stringstream buffer;
+    buffer << file.rdbuf();
+
+    // Close the file
+    file.close();
+
+    // Return the contents as a string
+    return buffer.str();
+}
+
+#pragma region Load WebAssembly
+
+v8::Local<v8::Value> runWASM(v8::Local<v8::Context> context, v8::Isolate* isolate)
+{
+    // Load and run WebAssembly module
+    std::string wasmCode = readFile("goclient\\main.wasm");
+    printf("Source: (length=%d)\r\n", wasmCode.size());
+
+    // Create a string containing the JavaScript source code with the Wasm code
+    v8::Local<v8::String> source = v8::String::NewFromUtf8(isolate, wasmCode.c_str()).ToLocalChecked();
+
+
+    // Compile the source code.
+    v8::Local<v8::Script> script =
+        v8::Script::Compile(context, source).ToLocalChecked();
+
+    v8::String::Utf8Value strScript(isolate, script);
+    printf("Script:\r\n%s\r\n", *strScript);
+
+    // Run the script to get the result.
+    return script->Run(context).ToLocalChecked();
+}
+
+#pragma endregion Load WebAssembly
+
+v8::Local<v8::Value> runJS(v8::Local<v8::Context> context, v8::Isolate* isolate, const char* js)
+{
+    // Create a string containing the JavaScript source code.
+    v8::Local<v8::String> source =
+        v8::String::NewFromUtf8(isolate, js).ToLocalChecked();
+
+    // Compile the source code.
+    v8::Local<v8::Script> script =
+        v8::Script::Compile(context, source).ToLocalChecked();
+
+    v8::String::Utf8Value strScript(isolate, script);
+    printf("Script:\r\n%s\r\n", *strScript);
+
+    // Run the script to get the result.
+    return script->Run(context).ToLocalChecked();
+}
+
 int main(int argc, char* argv[]) {
     // Initialize V8.
     v8::V8::InitializeICUDefaultLocation(argv[0]);
@@ -144,11 +209,13 @@ int main(int argc, char* argv[]) {
 
 
         {
+            /*
+
             // Create a string containing the JavaScript source code.
             v8::Local<v8::String> source =
                 v8::String::NewFromUtf8Literal(isolate, R"(
 
-// const ws = new WebSocket("wss://example.org");
+// const ws = new TCPConnectSocket("wss://example.org");
 // <unknown>:64: Uncaught ReferenceError: WebSocket is not defined
 //
 // #
@@ -160,15 +227,38 @@ console.log('WebSocket is not available in V8!!!');
 MyNamespace.myCallback('hello');
 'Hello, World!';
                     )");
-            // Compile the source code.
-            v8::Local<v8::Script> script =
-                v8::Script::Compile(context, source).ToLocalChecked();
-            // Run the script to get the result.
-            v8::Local<v8::Value> result = script->Run(context).ToLocalChecked();
+            */
+
+#pragma region Add Callback for WebAssembly
+
+            v8::Local<v8::Value> result = runJS(context, isolate, R"(
+
+function updateDOM(text) {
+    console.log('updateDOM:', text);
+}
+
+"Hello from JS" // last line of the JS script, this will be the returned result
+                    )");
+
             // Convert the result to an UTF8 string.
             v8::String::Utf8Value utf8(isolate, result);
             // Print the result using printf.
-            printf("%s\n", *utf8);
+            printf("Result: %s\n", *utf8);            
+
+#pragma endregion Add Callback for WebAssembly
+
+#pragma region Use WebAssembly
+
+            runWASM(context, isolate);
+
+#pragma endregion Use WebAssembly
+
+            Sleep(1000);
+
+            runJS(context, isolate, "goMyFunc()");
+
+            Sleep(1000);
+
         }
     }
     // Dispose the isolate and tear down V8.

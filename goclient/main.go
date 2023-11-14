@@ -1,3 +1,5 @@
+// +build js,wasm
+
 package main
 
 import (
@@ -5,12 +7,28 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"syscall/js"
 	"time"
 
 	"github.com/gorilla/websocket"
 )
 
+func goMyFunc(value js.Value, args []js.Value) interface{} {
+	fmt.Println("goMyFunc: Invoked.")
+	js.Global().Call("updateDOM", "goMyFunc: This was called from Golang!")
+	return nil
+}
+
 func main() {
+
+	fmt.Println("This is the start.")
+
+	// Register the Go function as a JavaScript function
+	js.Global().Set("goMyFunc", js.FuncOf(goMyFunc))
+
+	js.Global().Call("updateDOM", "This is called from Golang!")
+
+
 	// WebSocket server address
 	serverAddr := "ws://localhost:8080/ws"
 
