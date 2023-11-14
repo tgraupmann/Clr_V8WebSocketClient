@@ -3,6 +3,8 @@
 // Copyright 2015 the V8 project authors. All rights reserved.
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+#include <fstream>
+#include <sstream>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -40,6 +42,23 @@ v8::Local<v8::Value> runJS(v8::Local<v8::Context> context, v8::Isolate* isolate,
 
 	// Run the script to get the result.
 	return script->Run(context).ToLocalChecked();
+}
+
+std::string readFile(const char* filePath) {
+	std::ifstream file(filePath, std::ios::in | std::ios::binary);
+	if (!file.is_open()) {
+		return ""; // Return an empty string if the file cannot be opened
+	}
+
+	// Read the contents of the file into a stringstream
+	std::stringstream buffer;
+	buffer << file.rdbuf();
+
+	// Close the file
+	file.close();
+
+	// Return the contents as a string
+	return buffer.str();
 }
 
 // Function to read the contents of a file and return them as a uint8array buffer
@@ -138,6 +157,27 @@ int main(int argc, char* argv[]) {
 
 		if (true)
 		{
+			runJS(context, isolate, R"(
+	globalThis.crypto = 'ignore';
+	globalThis.performance = 'ignore';
+
+	class TextEncoder {
+	  constructor() {
+	  }
+	}
+
+	globalThis.TextEncoder = TextEncoder;
+
+	class TextDecoder {
+	  constructor() {
+	  }
+	}
+	globalThis.TextDecoder = TextDecoder;
+)");
+
+			string wasmJS = readFile("goclient/js/wasm_exec.js");
+			runJS(context, isolate, wasmJS.c_str());
+
 			loadWASM(context, isolate, "goclient\\main.wasm");
 
 			//runJS(context, isolate, "goMyFunc();\r\n");
